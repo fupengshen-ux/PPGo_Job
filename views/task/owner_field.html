@@ -1,0 +1,12 @@
+<div class="layui-form-item">
+    <label class="layui-form-label mw200">任务负责人</label>
+    <div class="layui-input-inline mw400">
+        <select name="owner_id" lay-search>
+            <option value="0" {{if eq .selectedOwnerId 0}}selected{{end}}>未分配</option>
+            {{range .ownerOptions}}
+            <option value="{{.Id}}" {{if eq .Id $.selectedOwnerId}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    <div class="layui-form-mid layui-word-aux">负责人用于管理和筛选，权限仍按角色与分组。</div>
+</div>

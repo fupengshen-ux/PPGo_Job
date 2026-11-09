@@ -1,0 +1,94 @@
+<style>
+    .task-search { margin: 15px 20px 10px 0; padding: 12px 12px 2px; background: #f7f8fa; border: 1px solid #e6e6e6; }
+    .task-search .layui-inline { margin-right: 8px; margin-bottom: 10px; vertical-align: top; }
+    .task-search .search-field { width: 170px; }
+    .task-search .search-label { display: block; margin-bottom: 5px; color: #555; font-size: 12px; }
+    .task-search .search-actions { margin: 8px 0; }
+    .task-search-hint { color: #777; font-size: 12px; line-height: 22px; margin-bottom: 8px; }
+</style>
+<form id="task-search" class="layui-form task-search" data-user-id="{{.loginUserId}}" onsubmit="return false;">
+    <div class="layui-inline search-field">
+        <label class="search-label" for="task_name">任务名称（包含关键词）</label>
+        <input class="layui-input" name="task_name" id="task_name" autocomplete="off" placeholder="输入任务名称">
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="task_id">任务 ID</label>
+        <input class="layui-input" name="task_id" id="task_id" inputmode="numeric" autocomplete="off" placeholder="精确匹配">
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="owner_id">负责人</label>
+        <select name="owner_id" id="owner_id" lay-search>
+            <option value="">全部负责人</option>
+            <option value="0">未分配</option>
+            {{range .searchPeople}}<option value="{{.Id}}">{{.Name}}</option>{{end}}
+        </select>
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="create_id">创建人</label>
+        <select name="create_id" id="create_id" lay-search>
+            <option value="">全部创建人</option>
+            <option value="0">未知创建人</option>
+            {{range .searchPeople}}<option value="{{.Id}}">{{.Name}}</option>{{end}}
+        </select>
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="group_id">任务分组</label>
+        <select name="group_id" id="group_id" lay-search>
+            <option value="0">全部可见分组</option>
+            {{range $id, $name := .taskGroup}}<option value="{{$id}}">{{$name}}</option>{{end}}
+        </select>
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="task_status">任务状态（调度／审核）</label>
+        <select name="task_status" id="task_status">
+            <option value="">本页全部状态</option>
+            {{if .searchAudit}}
+            <option value="2">待审核</option>
+            <option value="3">审核未通过</option>
+            {{else}}
+            <option value="1">启用</option>
+            <option value="0">停用</option>
+            {{end}}
+        </select>
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="server_id">执行服务器</label>
+        <select name="server_id" id="server_id" lay-search>
+            <option value="">全部执行服务器</option>
+            <option value="0">本机执行</option>
+            {{range .serverGroup}}
+            <optgroup label="{{.GroupName}}">
+                {{range $id, $name := .Servers}}<option value="{{$id}}">{{$name}}</option>{{end}}
+            </optgroup>
+            {{end}}
+        </select>
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="latest_result">各服务器最近执行结果</label>
+        <select name="latest_result" id="latest_result">
+            <option value="all">全部执行结果</option>
+            <option value="success">全部成功</option>
+            <option value="any_error">存在异常（失败／超时）</option>
+            <option value="failed">存在失败</option>
+            <option value="timeout">存在超时</option>
+            <option value="partial_missing">部分无记录</option>
+            <option value="no_record">全部无记录</option>
+        </select>
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="created_from">创建日期起（北京时间）</label>
+        <input class="layui-input task-search-date" name="created_from" id="created_from" autocomplete="off" placeholder="YYYY-MM-DD">
+    </div>
+    <div class="layui-inline search-field">
+        <label class="search-label" for="created_to">创建日期止（含当天）</label>
+        <input class="layui-input task-search-date" name="created_to" id="created_to" autocomplete="off" placeholder="YYYY-MM-DD">
+    </div>
+    <div class="search-actions">
+        <button type="button" class="layui-btn" id="task-search-submit"><i class="fa fa-search"></i> 查询</button>
+        <button type="button" class="layui-btn layui-btn-primary" id="task-search-reset">重置</button>
+        <button type="button" class="layui-btn layui-btn-primary" id="task-search-owned">我负责的</button>
+        <button type="button" class="layui-btn layui-btn-primary" id="task-search-created">我创建的</button>
+    </div>
+    <div class="task-search-hint">条件同时生效。执行结果按当前各节点最后一条已记录日志汇总，并非同一轮调度；执行中沿用上次结果。选择服务器后仅统计该节点，日志清理后以剩余记录为准。</div>
+</form>
+<script src="/static/admin/js/task-search.js"></script>

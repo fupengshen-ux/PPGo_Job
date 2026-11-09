@@ -1,32 +1,15 @@
 <div class="layui-layout layui-layout-admin" style="padding-left: 20px;">
     <div class="layui-row" style="margin-top: 20px;">
-        <div class="layui-col-xs6">
+        <div class="layui-col-xs12">
             <div class="layui-btn-group">
                 <button class="layui-btn" data-type="tabAdd" id="add">新增</button>
                 <button class="layui-btn batch" data-type="batchstart" >启动</button>
-                <button class="layui-btn layui-btn-danger batch" data-type="batchpause" >暂停</button>cron
+                <button class="layui-btn layui-btn-danger batch" data-type="batchpause" >暂停</button>
             </div>
         </div>
-        <div class="layui-col-xs6 search_text" style="text-align: right;">
-
-            <form class="layui-form" action="" onsubmit="javascript:return false;">
-                <div class="demoTable">
-                    <div class="layui-inline" style="width: 40%">
-                        <input class="layui-input" name="task_name" id="task_name" autocomplete="off"  placeholder="任务名称" >
-                    </div>
-                    <div class="layui-inline pp-search" style="width: 20%;text-align: left;">
-                        <select name="modules" lay-verify="required" lay-filter="select_group" id="group_id" lay-search="">
-                            <option value="0">全部</option>
-                            {{range $k, $v := .taskGroup}}
-                                <option value="{{$k}}" {{if eq $k $.groupId}} selected {{end}}>{{$v}}</option>
-                            {{end}}
-                        </select>
-                    </div>
-                    <button class="layui-btn" data-type="reload" id="reload"><i class="fa fa-search"></i>查询</button>
-                </div>
-            </form>
-        </div>
     </div>
+
+    {{template "task/search_fields.html" .}}
 
     <table class="layui-hide" id="table_list" lay-filter="table_filter">
     </table>
@@ -41,7 +24,7 @@
 </div>
 <script>
 
-    layui.use(['table','form','element'], function(){
+    layui.use(['table','form','element','laydate'], function(){
         var table = layui.table;
         var form = layui.form;
         var element = layui.element;
@@ -59,7 +42,10 @@
             ,cols: [[
                 {checkbox: true, fixed: true},
                 {field:'id', title: 'ID', align:'center', width:80,sort: true}
-                ,{field:'task_name', title: '任务名称'}
+                ,{field:'task_name', title: '任务名称', minWidth:260}
+                ,{field:'owner_name', title:'负责人', width:160, templet:function(d){return PPTaskSearch.escapeText(d.owner_name);}}
+                ,{field:'create_name', title:'创建人', width:160, templet:function(d){return PPTaskSearch.escapeText(d.create_name);}}
+                ,{field:'latest_execution_summary', title:'各节点最近结果', width:240, templet:PPTaskSearch.summaryText}
                 ,{field:'cron_spec',title: '时间表达式', width:100}
                 ,{field:'next_time', width:170,title: '下次执行时间'}
                 ,{field:'pre_time', title: '上次执行时间',width:170,}
@@ -70,19 +56,11 @@
             ,page: true
             ,limit:20
             ,limits: [20,40,80]
-            ,height: "full-130"
+            ,height: Math.max(260, window.innerHeight - document.getElementById('task-search').getBoundingClientRect().bottom - 35)
         });
 
-        var $ = layui.$, active = {
-            reload: function(){
-                table.reload('listReload', {
-                    where: {
-                        group_id: $('#group_id').val(),
-                        task_name:$('#task_name').val(),
-                    }
-                });
-            }
-        };
+        var $ = layui.$;
+        var reloadSearch = PPTaskSearch.bind(table, form, $, layui.laydate);
 
         $("#add").on("click",function() {
             window.parent.openTab("/task/add",'新增任务',"admin_task_add-0",'fa-plus');
@@ -96,8 +74,7 @@
         //监听工具条
         table.on('tool(table_filter)', function(obj){
             var data = obj.data;
-            var task_name = window.parent.delHtmlTag(data.task_name)
-            task_name = window.parent.getDelimiterLastString(task_name,"-")
+            var task_name = PPTaskSearch.escapeText(data.task_name_raw || window.parent.delHtmlTag(data.task_name));
             if(obj.event === 'edit'){
                 window.parent.openTab("/task/edit?id="+data.id,task_name+' 编辑',"admin_task_edit-"+data.id,'fa-edit');
             } else if(obj.event === 'log'){
@@ -154,7 +131,7 @@
                 $.post('/task/ajax'+action, {"ids":ids}, function (out) {
                     if (out.status == 0) {
                         layer.msg("操作成功",{icon: 1,shade:0.3,time:1000},function () {
-                            $('#reload').click();
+                            reloadSearch();
                         })
                     } else {
                         layer.msg(out.message)
@@ -171,10 +148,6 @@
             return ;
         })
 
-        $('.demoTable .layui-btn').on('click', function(){
-            var type = $(this).data('type');
-            active[type] ? active[type].call(this) : '';
-        });
     });
 
 </script>
