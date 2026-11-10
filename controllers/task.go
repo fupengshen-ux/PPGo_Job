@@ -10,6 +10,7 @@ package controllers
 import (
 	"fmt"
 	"github.com/george518/PPGo_Job/libs"
+	"html"
 	"strconv"
 	"strings"
 	"time"
@@ -26,22 +27,19 @@ type TaskController struct {
 
 func (self *TaskController) List() {
 	self.Data["pageTitle"] = "任务管理"
-	self.Data["taskGroup"] = taskGroupLists(self.taskGroups, self.userId)
-	self.Data["groupId"] = 0
-	//arr := strings.Split(self.Ctx.GetCookie("groupid"), "|")
-	//if len(arr) > 0 {
-	//	self.Data["groupId"], _ = strconv.Atoi(arr[0])
-	//}
+	self.prepareTaskSearch(false)
 	self.display()
 }
 
 func (self *TaskController) AuditList() {
 	self.Data["pageTitle"] = "任务审核"
+	self.prepareTaskSearch(true)
 	self.display()
 }
 
 func (self *TaskController) Add() {
 	self.Data["pageTitle"] = "新增任务"
+	self.prepareTaskOwner(self.userId, false)
 	self.Data["taskGroup"] = taskGroupLists(self.taskGroups, self.userId)
 	self.Data["serverGroup"] = serverLists(self.serverGroups, self.userId)
 	self.Data["isAdmin"] = self.userId
@@ -57,6 +55,10 @@ func (self *TaskController) Edit() {
 	if err != nil {
 		self.ajaxMsg(err.Error(), MSG_ERR)
 	}
+	if !self.canAccessTaskGroup(task.GroupId) {
+		self.ajaxMsg("没有该任务分组的权限", MSG_ERR)
+	}
+	self.prepareTaskOwner(task.OwnerId, false)
 
 	if task.Status == 1 {
 		self.ajaxMsg("运行状态无法编辑任务，请先暂停任务", MSG_ERR)
@@ -116,6 +118,10 @@ func (self *TaskController) Copy() {
 	if err != nil {
 		self.ajaxMsg(err.Error(), MSG_ERR)
 	}
+	if !self.canAccessTaskGroup(task.GroupId) {
+		self.ajaxMsg("没有该任务分组的权限", MSG_ERR)
+	}
+	self.prepareTaskOwner(task.OwnerId, true)
 
 	//if task.Status == 1 {
 	//	self.ajaxMsg("运行状态无法编辑任务，请先暂停任务", MSG_ERR)
@@ -173,6 +179,9 @@ func (self *TaskController) Detail() {
 	task, err := models.TaskGetById(id)
 	if err != nil {
 		self.ajaxMsg(err.Error(), MSG_ERR)
+	}
+	if !self.canAccessTaskGroup(task.GroupId) {
+		self.ajaxMsg("没有该任务分组的权限", MSG_ERR)
 	}
 
 	TextStatus := []string{
@@ -255,6 +264,19 @@ func (self *TaskController) Detail() {
 	}
 	self.Data["CreateName"] = createName
 	self.Data["UpdateName"] = updateName
+	ownerNames := make(map[int]string)
+	if task.OwnerId > 0 {
+		if owner, err := models.AdminGetById(task.OwnerId); err == nil {
+			ownerNames[owner.Id] = owner.RealName
+			if owner.RealName == "" {
+				ownerNames[owner.Id] = owner.LoginName
+			}
+			if owner.Status != 1 {
+				ownerNames[owner.Id] += "（已停用）"
+			}
+		}
+	}
+	self.Data["OwnerName"] = models.TaskPersonDisplay(task.OwnerId, ownerNames, "未分配")
 	self.Data["serverName"] = serverName
 
 	self.Data["NotifyTplName"] = "未知"
@@ -274,6 +296,10 @@ func (self *TaskController) AjaxSave() {
 		task := new(models.Task)
 		task.CreateId = self.userId
 		task.GroupId, _ = self.GetInt("group_id")
+		if !self.canAccessTaskGroup(task.GroupId) {
+			self.ajaxMsg("没有该任务分组的权限", MSG_ERR)
+		}
+		self.assignTaskOwner(task, true)
 		task.TaskName = strings.TrimSpace(self.GetString("task_name"))
 		task.Description = strings.TrimSpace(self.GetString("description"))
 		task.Concurrent, _ = self.GetInt("concurrent")
@@ -317,13 +343,26 @@ func (self *TaskController) AjaxSave() {
 		self.ajaxMsg("", MSG_OK)
 	}
 
-	task, _ := models.TaskGetById(task_id)
+	task, err := models.TaskGetById(task_id)
+	if err != nil {
+		self.ajaxMsg("任务不存在", MSG_ERR)
+	}
+	if !self.canAccessTaskGroup(task.GroupId) {
+		self.ajaxMsg("没有该任务分组的权限", MSG_ERR)
+	}
+	if task.Status == 1 {
+		self.ajaxMsg("请先暂停任务再编辑", MSG_ERR)
+	}
+	self.assignTaskOwner(task, false)
 	//修改
 	task.Id = task_id
 	task.UpdateTime = time.Now().Unix()
 	task.TaskName = strings.TrimSpace(self.GetString("task_name"))
 	task.Description = strings.TrimSpace(self.GetString("description"))
 	task.GroupId, _ = self.GetInt("group_id")
+	if !self.canAccessTaskGroup(task.GroupId) {
+		self.ajaxMsg("没有目标任务分组的权限", MSG_ERR)
+	}
 	task.Concurrent, _ = self.GetInt("concurrent")
 	task.ServerIds = strings.TrimSpace(self.GetString("server_ids"))
 	task.CronSpec = strings.TrimSpace(self.GetString("cron_spec"))
@@ -643,34 +682,21 @@ func (self *TaskController) AjaxNotifyType() {
 }
 
 func (self *TaskController) Table() {
-	//列表
-	page, err := self.GetInt("page")
-	if err != nil {
-		page = 1
+	if err := self.Ctx.Request.ParseForm(); err != nil {
+		self.ajaxList("查询参数无效", MSG_ERR, 0, []interface{}{})
+		return
 	}
-	limit, err := self.GetInt("limit")
+	search, err := parseTaskSearch(self.Ctx.Request.Form, self.userId, self.taskGroups)
 	if err != nil {
-		limit = 30
+		self.ajaxList(err.Error(), MSG_ERR, 0, []interface{}{})
+		return
 	}
-
-	groupId, _ := self.GetInt("group_id", 0)
-
-	//0-全部，-1如果存在，n,如果不存在，0
-
-	//if groupId == -1 {
-	//	groupId = 0
-	//	arr := strings.Split(self.Ctx.GetCookie("groupid"), "|")
-	//	if len(arr) > 0 {
-	//		groupId, _ = strconv.Atoi(arr[0])
-	//	}
-	//}
-
-	//if groupId > 0 {
-	//	self.Ctx.SetCookie("groupid", strconv.Itoa(groupId)+"|job")
-	//}
-
-	status, _ := self.GetInt("status")
-	taskName := strings.TrimSpace(self.GetString("task_name"))
+	searchResult, err := models.TaskSearchList(search)
+	if err != nil {
+		beego.Error("task search: ", err)
+		self.ajaxList("任务查询失败，请检查数据库迁移和服务日志", MSG_ERR, 0, []interface{}{})
+		return
+	}
 
 	StatusText := []string{
 		"<font color='red'><i class='fa fa-minus-square'></i></font>",
@@ -679,38 +705,8 @@ func (self *TaskController) Table() {
 		"<font color='red'><i class='fa fa-times-circle'></i></font>",
 	}
 
-	taskGroup := taskGroupLists(self.taskGroups, self.userId)
-	self.pageSize = limit
-	//查询条件
-	filters := make([]interface{}, 0)
-
-	if status == 2 {
-		//审核中，审核失败
-		ids := []int{2, 3}
-		filters = append(filters, "status__in", ids)
-	} else {
-		ids := []int{0, 1}
-		filters = append(filters, "status__in", ids)
-	}
-	//搜索全部
-	if groupId == 0 {
-		if self.userId != 1 {
-			groups := strings.Split(self.taskGroups, ",")
-			groupsIds := make([]int, 0)
-			for _, v := range groups {
-				id, _ := strconv.Atoi(v)
-				groupsIds = append(groupsIds, id)
-			}
-			filters = append(filters, "group_id__in", groupsIds)
-		}
-	} else if groupId > 0 {
-		filters = append(filters, "group_id", groupId)
-	}
-	if taskName != "" {
-		filters = append(filters, "task_name__icontains", taskName)
-	}
-
-	result, count := models.TaskGetList(page, self.pageSize, filters...)
+	taskGroup := self.taskSearchGroups()
+	result, count := searchResult.Tasks, searchResult.Count
 	list := make([]map[string]interface{}, len(result))
 
 	for k, v := range result {
@@ -724,7 +720,14 @@ func (self *TaskController) Table() {
 		}
 
 		row["group_name"] = groupName
-		row["task_name"] = StatusText[v.Status] + " " + groupName + "-" + "&nbsp;" + v.TaskName
+		row["task_name"] = StatusText[v.Status] + " " + html.EscapeString(groupName) + "-" + "&nbsp;" + html.EscapeString(v.TaskName)
+		row["task_name_raw"] = v.TaskName
+		row["owner_id"] = v.OwnerId
+		row["owner_name"] = models.TaskPersonDisplay(v.OwnerId, searchResult.People, "未分配")
+		row["create_id"] = v.CreateId
+		row["create_name"] = models.TaskPersonDisplay(v.CreateId, searchResult.People, "未知")
+		row["create_time"] = v.CreateTime
+		row["latest_execution_summary"] = searchResult.Summaries[v.Id]
 		row["description"] = v.Description
 
 		//row["status_text"] = StatusText[v.Status]
@@ -771,6 +774,7 @@ func (self *TaskController) ApiTask() {
 	if task_id == 0 {
 		task := new(models.Task)
 		task.CreateId, _ = self.GetInt("create_id")
+		self.assignTaskOwner(task, true)
 		task.GroupId, _ = self.GetInt("group_id")
 		task.TaskName = strings.TrimSpace(self.GetString("task_name"))
 		task.Description = strings.TrimSpace(self.GetString("description"))
@@ -813,11 +817,15 @@ func (self *TaskController) ApiTask() {
 		self.ajaxMsg(task_id, MSG_OK)
 	}
 
-	task, _ := models.TaskGetById(task_id)
+	task, err := models.TaskGetById(task_id)
+	if err != nil {
+		self.ajaxMsg("任务不存在", MSG_ERR)
+	}
 
 	if task.Status == 1 {
 		self.ajaxMsg("运行状态无法编辑任务，请先暂停任务", MSG_ERR)
 	}
+	self.assignTaskOwner(task, false)
 	//修改
 	task.Id = task_id
 	task.UpdateTime = time.Now().Unix()

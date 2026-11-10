@@ -40,6 +40,7 @@ type Task struct {
 	NotifyTplId   int
 	NotifyUserIds string
 	CreateId      int
+	OwnerId       int
 	UpdateId      int
 	CreateTime    int64
 	UpdateTime    int64
