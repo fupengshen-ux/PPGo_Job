@@ -45,6 +45,10 @@ func Init(startTime int64) {
 		new(Task),
 		new(TaskLog),
 		new(NotifyTpl),
+		new(MonitorSample),
+		new(MonitorConfig),
+		new(MonitorState),
+		new(MonitorEvent),
 	)
 
 	if beego.AppConfig.String("runmode") == "dev" {

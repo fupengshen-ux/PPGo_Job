@@ -153,7 +153,7 @@ func (self *BaseController) AdminAuth() {
 	allow_url := ""
 	i, j := 0, 0
 	for _, v := range result {
-		if v.AuthUrl != " " || v.AuthUrl != "/" {
+		if v.AuthUrl != " " && v.AuthUrl != "/" {
 			allow_url += v.AuthUrl
 		}
 		row := make(map[string]interface{})

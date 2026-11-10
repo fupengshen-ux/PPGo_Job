@@ -3,6 +3,8 @@ PPGo_Job定时任务管理系统
 
 本仓库自定义开发说明：[任务高级搜索、负责人及各节点最近执行结果筛选](docs/task-search.md)。升级前先执行对应增量数据库迁移，再替换程序和页面。
 
+[Agent 主机监控、近三天趋势与资源邮件告警](docs/server-monitor.md)：复用现有 Agent 辅助人工选机；告警默认关闭，升级步骤和测试说明见文档。
+
 ![](http://www.haodaquan.com/Uploads/article/2018-07-26/153262059813931.png)
 
 一、说明

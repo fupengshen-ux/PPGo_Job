@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/astaxie/beego/logs"
-	. "github.com/george518/PPGo_Job/jobs"
+	"github.com/george518/PPGo_Job/jobs"
 	"github.com/george518/PPGo_Job/libs"
 	"github.com/george518/PPGo_Job/models"
 	"os/exec"
@@ -26,7 +26,7 @@ var CmdMap sync.Map
 
 func SetCmdMap(key string, cmd *exec.Cmd) {
 	if _, ok := CmdMap.Load(key); ok {
-		Counter.Store(key, cmd)
+		jobs.Counter.Store(key, cmd)
 	}
 }
 
@@ -38,7 +38,7 @@ func GetCmdMap(key string) *exec.Cmd {
 	return nil
 }
 
-func RestJobFromTask(task *models.Task, serverId int) (*Job, error) {
+func RestJobFromTask(task *models.Task, serverId int) (*jobs.Job, error) {
 
 	if task.Id < 1 {
 		return nil, fmt.Errorf("ToJob: 缺少id")
@@ -57,14 +57,14 @@ func RestJobFromTask(task *models.Task, serverId int) (*Job, error) {
 	return job, nil
 }
 
-func ResetCommandJob(id int, serverId int, name string, command string) *Job {
-	job := &Job{
+func ResetCommandJob(id int, serverId int, name string, command string) *jobs.Job {
+	job := &jobs.Job{
 		Id:   id,
 		Name: name,
 	}
 
 	job.JobKey = libs.JobKey(id, serverId)
-	job.RunFunc = func(timeout time.Duration) (jobResult *JobResult) {
+	job.RunFunc = func(timeout time.Duration) (jobResult *jobs.JobResult) {
 		bufOut := new(bytes.Buffer)
 		bufErr := new(bytes.Buffer)
 		//cmd := exec.Command("/bin/bash", "-c", command)
@@ -79,7 +79,7 @@ func ResetCommandJob(id int, serverId int, name string, command string) *Job {
 		cmd.Start()
 		err, isTimeout := runCmdWithTimeout(cmd, timeout)
 
-		jobResult = new(JobResult)
+		jobResult = new(jobs.JobResult)
 		jobResult.ErrMsg = bufErr.String()
 		jobResult.OutMsg = bufOut.String()
 		jobResult.IsOk = true
@@ -115,7 +115,7 @@ func runCmdWithTimeout(cmd *exec.Cmd, timeout time.Duration) (error, bool) {
 	}
 }
 
-func Run(j *Job) *JobResult {
+func Run(j *jobs.Job) *jobs.JobResult {
 
 	defer func() {
 		if err := recover(); err != nil {

@@ -20,6 +20,7 @@ type Conf struct {
 	RegisterUrl     string
 	UpdateStatusUrl string
 	IpType          int
+	MonitorDiskPath string
 }
 
 var ExitChan = make(chan int, 1)

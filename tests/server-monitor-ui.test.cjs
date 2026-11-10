@@ -1,0 +1,57 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const context = {};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/admin/js/server-monitor.js'),'utf8'),context);
+const ui = context.PPMonitor;
+test('monitor escapes text and places unknown/stale metrics last in both directions',()=>{
+    assert.equal(ui.escapeText('<img src=x onerror="bad">'),'&lt;img src=x onerror=&quot;bad&quot;&gt;');
+    const rows=[{server_id:1,status:'failed',cpu:null},{server_id:2,status:'ok',cpu:70},{server_id:3,status:'stale',cpu:1},{server_id:4,status:'ok',cpu:20}];
+    assert.deepEqual(rows.slice().sort((a,b)=>ui.compare(a,b,'cpu',false)).map(x=>x.server_id),[4,2,1,3]);
+    assert.deepEqual(rows.slice().sort((a,b)=>ui.compare(a,b,'cpu',true)).map(x=>x.server_id),[2,4,1,3]);
+});
+test('history preserves null samples and inserts a gap across controller downtime',()=>{
+    const p=ui.historyPoints([{collected_at:1000,cpu:10},{collected_at:1060,cpu:null},{collected_at:1300,cpu:20}],'cpu');
+    assert.equal(p.length,4);assert.equal(p[1][1],null);assert.equal(p[2][1],null);assert.equal(p[3][1],20);
+});
+test('history shows five fixed-color series grouped by unit with linked time axes',()=>{
+    const rows=[{collected_at:1000,cpu:70,memory:40,load_per_core:0.5,assigned:20,enabled:3},{collected_at:1060,cpu:60,memory:45,load_per_core:0.8,assigned:21,enabled:4}];
+    const option=ui.historyOption(rows,{});
+    assert.equal(option.grid.length,3);
+    assert.deepEqual(Array.from(option.series,s=>s.yAxisIndex),[0,0,1,2,2]);
+    assert.deepEqual(Array.from(option.series,s=>s.xAxisIndex),[0,0,1,2,2]);
+    assert.equal(new Set(option.series.map(s=>s.itemStyle.normal.color)).size,5);
+    assert.ok(option.series.every(s=>option.legend.selected[s.name]===true && s.connectNulls===false));
+    assert.equal(option.yAxis[0].max,100);
+    assert.equal(option.yAxis[2].minInterval,1);
+    assert.ok(option.xAxis.every(a=>a.min===1000000 && a.max===1060000));
+    assert.equal(option.axisPointer.link[0].xAxisIndex,'all');
+    const bounds=ui.historyBounds(rows,[20,80]);
+    assert.equal(bounds.min,1012000);
+    assert.equal(bounds.max,1048000);
+    const collapsed=ui.historyBounds(rows,[100,100]);
+    assert.ok(collapsed.min<collapsed.max && collapsed.min>=1000000 && collapsed.max<=1060000);
+    const tooltip=option.tooltip.formatter([{value:[1000000,70]}]);
+    assert.ok(tooltip.includes('70.0%') && tooltip.includes('0.50') && tooltip.includes('20个'));
+});
+test('history preserves legend selection across redraws and handles empty or missing data',()=>{
+    const selected={'CPU 使用率':false};
+    const rows=[{collected_at:1000,cpu:70,memory:null,assigned:0},{collected_at:1300,cpu:60,memory:40,assigned:2}];
+    const first=ui.historyOption(rows,selected);
+    assert.equal(first.legend.selected['CPU 使用率'],false);
+    assert.equal(first.series[0].data[1][1],null);
+    assert.ok(first.tooltip.formatter([{value:[1000000,null]}]).includes('内存使用率：—'));
+    selected['内存使用率']=false;
+    assert.ok(!first.tooltip.formatter([{value:[1300000,60]}]).includes('内存使用率'));
+    const next=ui.historyOption(rows,selected);
+    assert.equal(next.legend.selected['CPU 使用率'],false);
+    assert.equal(next.legend.selected['内存使用率'],false);
+    assert.equal(next.series[0].itemStyle.normal.color,first.series[0].itemStyle.normal.color);
+    const empty=ui.historyOption([],{});
+    assert.equal(empty.series.length,5);
+    assert.ok(empty.series.every(s=>s.data.length===0 && empty.legend.selected[s.name]));
+    assert.equal(empty.tooltip.formatter([]),'');
+    assert.equal(ui.historyBounds([], [20,80]).min,undefined);
+});
