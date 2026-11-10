@@ -32,6 +32,8 @@ type TaskServer struct {
 	CreateTime     int64
 	UpdateTime     int64
 	Status         int
+
+	MonitorAlertDisabled bool
 }
 
 func (t *TaskServer) TableName() string {

@@ -78,7 +78,7 @@ go test ./jobs -run TestMergedExecutionIntegration -count=1 -v
 node --test tests/task-search-ui.test.cjs
 ```
 
-原 v2.8.0 的 `controllers/common.go` 存在 `AuthUrl != " " || AuthUrl != "/"` 的历史 vet 告警。本次保留该处既有逻辑；若默认测试因此中止，可对控制器功能测试单独使用 `go test -vet=off ./controllers -run 'Test(TaskSearch|ParseTaskSearch)' -count=1 -v`。这不表示全仓库 vet 检查通过。
+原 v2.8.0 的 `controllers/common.go` 曾存在 `AuthUrl != " " || AuthUrl != "/"` 的历史 vet 告警。后续主机监控开发已将其修正为 AND，并用默认 vet 检查运行相关控制器回归；无需关闭 vet。Agent 的 `RpcResult` 点导入冲突也已在该次升级中修复。上文整合验证描述保留的是当时的历史状态。
 
 真实数据库集成测试需要显式设置 `PPGO_TEST_MYSQL_DSN`，数据库必须是本机 TCP 地址且库名以 `_test` 结尾。例如 `TEST_USER:TEST_PASSWORD@tcp(127.0.0.1:33307)/ppgo_search_test?charset=utf8mb4`。测试使用唯一表前缀并清理自己创建的表，不读取生产配置；未设置环境变量时集成测试会显示 SKIP，而非通过。
 

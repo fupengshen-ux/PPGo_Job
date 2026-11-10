@@ -11,6 +11,7 @@ import (
 	"github.com/astaxie/beego"
 	"github.com/george518/PPGo_Job/jobs"
 	"github.com/george518/PPGo_Job/models"
+	"github.com/george518/PPGo_Job/monitor"
 	_ "github.com/george518/PPGo_Job/routers"
 	"time"
 )
@@ -24,5 +25,6 @@ func init() {
 }
 
 func main() {
+	monitor.Start()
 	beego.Run()
 }
