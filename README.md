@@ -5,6 +5,8 @@ PPGo_Job定时任务管理系统
 
 [Agent 主机监控、近三天趋势与资源邮件告警](docs/server-monitor.md)：复用现有 Agent 辅助人工选机；告警默认关闭，升级步骤和测试说明见文档。
 
+[本地一键制作 Linux amd64 升级包](docs/release.md)：在 Windows 执行 `./scripts/package.ps1 -Version v2.9.0 -Ref HEAD`，生成主控包、Agent 包和 SHA256 校验文件，不包含本机配置。
+
 ![](http://www.haodaquan.com/Uploads/article/2018-07-26/153262059813931.png)
 
 一、说明
